@@ -85,6 +85,11 @@ class GridLayout(QWidget):
         self.show()
 
     def chooseFile(self):
+        self.__directory = None
+        self.__sheet = None
+        self.__filterFlag = False
+        self.__isSuccess = False
+
         self.__directory = QtWidgets.QFileDialog.getOpenFileName(self, "选取文件","./", "Excel Files (*.xls | *.xlsx)")
         self.qLabel0.setText(os.path.split(self.__directory[0])[1])
 
@@ -246,7 +251,8 @@ class ChildWin1(QtWidgets.QDialog):
 
             self.buttonConfirm = QPushButton("确认")
             self.buttonConfirm.clicked.connect(self.submit)
-            layout.addWidget(self.buttonConfirm,y + 2,2)
+            layout.addWidget(self.buttonConfirm,x + 2,2)
+            print(y)
 
             self.setLayout(layout)
             self.show()
