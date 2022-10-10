@@ -9,11 +9,11 @@ from concurrent import futures
 from concurrent.futures import ThreadPoolExecutor
 
 import pandas as pd
-from PyQt5 import QtWidgets, QtGui, QtCore
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QHBoxLayout, QTableWidget, QHeaderView, \
+from PyQt6 import QtWidgets, QtGui, QtCore
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QTableWidget, QHeaderView, \
     QAbstractItemView, QMessageBox, QProgressDialog
-from PyQt5.QtWidgets import (QWidget, QLabel, QGridLayout, QLineEdit, QPushButton,
+from PyQt6.QtWidgets import (QWidget, QLabel, QGridLayout, QLineEdit, QPushButton,
                              QCheckBox)
 
 
@@ -63,6 +63,7 @@ class GridLayout(QWidget):
 
         self.sheetNum = QLineEdit()
         self.sheetNum.setFixedSize(250, 20)
+        self.sheetNum.textChanged.connect(self.textChange)
         layout.addWidget(self.sheetNum,2,1,1,4)
 
         qLabel4 = QLabel("是否需要筛选内容:")
@@ -73,6 +74,7 @@ class GridLayout(QWidget):
         layout.addWidget(self.buttonConfirm,3,1)
 
         self.qLabel5 = QLabel("已筛选")
+        self.qLabel5.setStyleSheet("color:green")
         self.qLabel5.setHidden(True)
         layout.addWidget(self.qLabel5,3,3,1,2)
 
@@ -93,6 +95,12 @@ class GridLayout(QWidget):
         self.__directory = QtWidgets.QFileDialog.getOpenFileName(self, "选取文件","./", "Excel Files (*.xls | *.xlsx)")
         self.qLabel0.setText(os.path.split(self.__directory[0])[1])
 
+    def textChange(self):
+        self.__sheet = None
+        self.__filterFlag = False
+        self.__isSuccess = False
+        self.qLabel5.setHidden(True)
+
     def filterClick(self):
         if self.check():
             self.child1 = ChildWin1(self, self.__sheet, '筛选')
@@ -110,8 +118,8 @@ class GridLayout(QWidget):
                     for k,v in filterData.items():
                         self.__sheet = self.__sheet[self.__sheet[k].isin(v)]
 
-                self.child1 = ChildWin1(self, self.__sheet, '比对')
-                self.child1.signal.connect(self.comparison)
+                self.child3 = ChildWin1(self, self.__sheet, '比对')
+                self.child3.signal.connect(self.comparison)
         except Exception as e:
             logging.exception(e)
 
@@ -134,11 +142,11 @@ class GridLayout(QWidget):
 
                 diff = []
                 for k, v in counts[0].items():
-                    if k not in counts[1] or counts[1][k] != v:
+                    if (k not in counts[1] or counts[1][k] != v) and k not in diff:
                         diff.append(k)
 
                 for k, v in counts[1].items():
-                    if k not in counts[0] or counts[0][k] != v:
+                    if (k not in counts[0] or counts[0][k] != v) and k not in diff:
                         diff.append(k)
 
                 time_tup = datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]
@@ -159,7 +167,7 @@ class GridLayout(QWidget):
             self.progress.setLabelText("正在比对...")
             self.progress.setCancelButtonText("取消")
             self.progress.setMinimumDuration(2000)
-            self.progress.setWindowModality(Qt.WindowModal)
+            self.progress.setWindowModality(Qt.WindowModality.WindowModal)
             self.progress.setRange(0,100)
 
             i = 0
@@ -187,11 +195,11 @@ class GridLayout(QWidget):
         sheetNum = self.sheetNum.text().strip()
 
         if self.__directory is None:
-            QMessageBox.warning(self, "提示", "请选择文件！！", QtWidgets.QMessageBox.Cancel)
+            QMessageBox.warning(self, "提示", "请选择文件！！")
             return False
 
         if len(sheetNum) == 0:
-            QMessageBox.warning(self, "提示", "请输入工作表！！", QtWidgets.QMessageBox.Cancel)
+            QMessageBox.warning(self, "提示", "请输入工作表！！")
             return False
 
         if self.__sheet is None:
@@ -201,7 +209,7 @@ class GridLayout(QWidget):
 
             except Exception as e:
                 logging.exception(e)
-                QMessageBox.warning(self, "提示", "所选工作表无数据！！", QtWidgets.QMessageBox.Cancel)
+                QMessageBox.warning(self, "提示", "所选工作表无数据！！")
                 return False
 
         return True
@@ -228,31 +236,33 @@ class ChildWin1(QtWidgets.QDialog):
 
         try:
             super().__init__()
-            self.setWindowTitle(title)
+            self.setWindowTitle("选择需要" + title + "的列")
             self.resize(400, 200)
 
             layout = QGridLayout()
 
-            self.filterText = QLabel("选择需要" + title + "的列:")
-            layout.addWidget(self.filterText,1,0)
-
             x = 1
-            y = 1
+            y = 0
+            skip = 0
             for i, v in enumerate(self.__sheet.columns.values):
+                if v.startswith("Unnamed"):
+                    skip = skip + 1
+                    continue
+
+                i = i - skip
                 self.__filterBox[i] = QCheckBox(v)
-                self.__filterBox[i].setCheckState(0)
+                self.__filterBox[i].setCheckState(Qt.CheckState.Unchecked)
 
                 if i != 0 and i % 4 == 0:
                     x = x + 1
-                    y = 1
+                    y = 0
 
                 layout.addWidget(self.__filterBox[i], x, y)
                 y = y + 1
 
             self.buttonConfirm = QPushButton("确认")
             self.buttonConfirm.clicked.connect(self.submit)
-            layout.addWidget(self.buttonConfirm,x + 2,2)
-            print(y)
+            layout.addWidget(self.buttonConfirm,x + 2,0)
 
             self.setLayout(layout)
             self.show()
@@ -267,7 +277,7 @@ class ChildWin1(QtWidgets.QDialog):
                     count = count + 1
 
             if count != 2:
-                QtWidgets.QMessageBox.warning(self, "提示", "比对的列只能选择两列！！", QtWidgets.QMessageBox.Cancel)
+                QtWidgets.QMessageBox.warning(self, "提示", "比对的列只能选择两列！！")
                 return
 
             self.close()
@@ -297,6 +307,8 @@ class ChildWin2(QtWidgets.QDialog):
 
     def __init__(self, sheet, filterBox):
         try:
+            self.__filterText = []
+            self.__selected = {}
 
             for i, value in enumerate(filterBox.values()):
                 if value.isChecked():
@@ -314,9 +326,9 @@ class ChildWin2(QtWidgets.QDialog):
 
             #表格对象
             self.tableWidget = QTableWidget()
-            self.tableWidget.setSelectionMode(QAbstractItemView.MultiSelection)
-            self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectItems)
-            self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
+            self.tableWidget.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+            self.tableWidget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)
+            self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
             self.tableWidget.setColumnCount(len(self.__filterText))
 
             rowCount = 0
@@ -331,11 +343,17 @@ class ChildWin2(QtWidgets.QDialog):
             self.tableWidget.setRowCount(rowCount)
             for i in range(rowCount):
                 for j in range(0, len(groups)):
-                    self.tableWidget.setItem(i, j, QtWidgets.QTableWidgetItem('' if len(groups[j]) <= i else str(groups[j][i])))
+                    value = '' if len(groups[j]) <= i else str(groups[j][i])
+
+                    self.tableWidget.setItem(i, j, QtWidgets.QTableWidgetItem(value))
+
+                    if value == '':
+                        item = self.tableWidget.item(i,j)
+                        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsSelectable)
 
             #设置表格字段
             self.tableWidget.setHorizontalHeaderLabels(self.__filterText)
-            self.tableWidget.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+            self.tableWidget.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
             layout.addWidget(self.tableWidget)
 
             self.setLayout(layout)
@@ -368,4 +386,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     #QWidget部件是pyqt5所有用户界面对象的基类。他为QWidget提供默认构造函数。默认构造函数没有父类。
     w = GridLayout()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
